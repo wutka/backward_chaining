@@ -1,0 +1,12 @@
+lives-in Millicent "Slytherin Dungeon".
+ambitious Millicent.
+lives-in Seamus "Gryffindor Tower".
+snogs Seamus Millicent.
+
+(ambitious ?x) and (is-a-squib ?x) :- has-bad-term ?x.
+lives-in ?x "Gryffindor Tower" :- is-protagonist ?x.
+lives-in ?x "Slytherin Dungeon" :- is-villain ?x, is-ambitious ?x.
+(is-protagonist ?x) or (is-villain ?x) :- studies-alot ?x.
+(studies-alot ?x) and (is-protagonist ?x) :- becomes-friend Hermione ?x.
+(snogs ?x ?y) and (lives-in ?x "Gryffindor Tower") and
+                (lives-in ?y "Slytherin Dungeon") :- has-bad-term ?x.
