@@ -24,6 +24,7 @@ you can either immediately start entering queries (e.g. assertions)
 that it will either prove as true or false, or you can use any
 of the following commands:
 
+```
 :a    -  List assertions
 :r    -  List rules
 +a    -  Start adding new assertions (blank line when done)
@@ -35,4 +36,5 @@ of the following commands:
 :new  -  Start with new empty knowledge base
 :quit -  Quit
 :help -  Display help information
+```
 
