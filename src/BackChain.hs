@@ -158,7 +158,7 @@ proveAntecedent kb (SimpleExpr name v) vm =
 -- ?x to "baz" and one mapping ?x to "quux". Then, this function will
 -- look for all results for is-bar "baz" and then for is-bar "quux".
 proveAntecedent kb (AndExpr a1 a2) vm =
-  foldl' (++) [] (map (proveAntecedentAnd2 kb a2) a1Result)
+  concatMap (proveAntecedentAnd2 kb a2) a1Result
   where
     a1Result = proveAntecedent kb a1 vm
 
@@ -215,7 +215,7 @@ proveRuleWithConsequent kb ic c rule vm =
 -- call to make one list of maps.
 proveRuleWithConsequents :: KnowledgeBase -> Consequent -> Rule -> VarMap -> [VarMap]
 proveRuleWithConsequents kb ic rule@(Rule _ cs) vm =
-  foldl' (++) [] (map proveForConsequent (filter (matchConsequent ic) cs))
+  concatMap proveForConsequent (filter (matchConsequent ic) cs)
   where
     proveForConsequent pc = proveRuleWithConsequent kb ic pc rule vm
 
