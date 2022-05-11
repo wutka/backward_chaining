@@ -55,6 +55,10 @@ consequentValueMatch _ _ = True
 matchConsequent :: Consequent -> Consequent -> Bool
 matchConsequent (Consequent cName1 cs1) (Consequent cName2 cs2) =
   cName1 == cName2 && and (zipWith consequentValueMatch cs1 cs2)
+
+ruleMatch :: Consequent -> Rule -> Bool
+ruleMatch c (Rule _ cs) =
+  any (matchConsequent c) cs
   
 --findMatches :: Consequent -> KnowledgeBase -> [Consequent]
 --findMatches c (KnowledgeBase assertions consequents) =
@@ -63,22 +67,21 @@ matchConsequent (Consequent cName1 cs1) (Consequent cName2 cs2) =
 
 updateVarMapWithPair :: VarMap -> (RuleValue, RuleValue) -> VarMap
 updateVarMapWithPair vm (RuleConstant _, RuleConstant _) = vm
-updateVarMapWithPair vm (RuleConstant s, RuleVariable v) =
-  Map.insert v s vm
-updateVarMapWithPair vm (RuleVariable _, RuleConstant _) = vm
+updateVarMapWithPair vm (RuleConstant _, RuleVariable _) = vm
+updateVarMapWithPair vm (RuleVariable v, RuleConstant s) =
+    Map.insert v s vm
 updateVarMapWithPair vm (RuleVariable _, RuleVariable _) = vm
 
-updateVarMap :: Consequent -> Consequent -> VarMap -> VarMap
-updateVarMap (Consequent _ c1) (Consequent _ c2) vm = foldl' updateVarMapWithPair vm (zip c1 c2)
+updateVarMap :: VarMap -> Consequent -> Consequent -> VarMap
+updateVarMap vm (Consequent _ c1) (Consequent _ c2) = foldl' updateVarMapWithPair vm (zip c1 c2)
 
 applyMapToValue :: VarMap -> RuleValue -> RuleValue
-applyMapToValue rc@(RuleConstant s) _ = rc
-applyMapToValue rv@(RuleVariable v) vm =
-  let mapValue = Map.lookup v vm in
-    if isJust mapValue then
-      RuleConstant $ getJust mapValue
-    else
-      rv
+applyMapToValue vm rc@(RuleConstant s) = rc
+applyMapToValue vm rv@(RuleVariable v) =
+  maybe rv RuleVariable $ Map.lookup v vm
+
+applyMapToConsequent :: Consequent -> VarMap -> Consequent
+applyMapToConsequent (Consequent name v) vm = Consequent name (map (applyMapToValue vm) v)
 
 applyMapToAntecedent :: Antecedent -> VarMap -> Antecedent
 applyMapToAntecedent (SimpleExpr name v) vm = SimpleExpr name (map (applyMapToValue vm) v)
@@ -88,36 +91,51 @@ applyMapToAntecedent (OrExpr a1 a2) vm = OrExpr (applyMapToAntecedent a1 vm)
                                                 (applyMapToAntecedent a2 vm)
                                          
 
-proveAntecedent :: Antecedent -> VarMap ->  [VarMap]
-proveAntecedent (SimpleExpr name v) vm =
-  proveConsequent (Consequent name v) vm
-proveAntecedent (AndExpr a1 a2) vm =
-  foldl' (++) [] (map (proveAntecedentAnd2 a2) a1Result)
+proveAntecedent :: KnowledgeBase -> Antecedent -> VarMap ->  [VarMap]
+proveAntecedent kb (SimpleExpr name v) vm =
+  proveConsequent kb (Consequent name v) vm
+  
+proveAntecedent kb (AndExpr a1 a2) vm =
+  foldl' (++) [] (map (proveAntecedentAnd2 kb a2) a1Result)
   where
-    a1Result = proveAntecedent a1 vm
-proveAntecedent (OrExpr a1 a2) vm =
-  (proveAntecedent a1 vm) ++ (proveAntecedent a2 vm)
+    a1Result = proveAntecedent kb a1 vm
+proveAntecedent kb (OrExpr a1 a2) vm =
+  proveAntecedent kb a1 vm ++ proveAntecedent kb a2 vm
 
-proveAntecedentAnd2 :: Antecedent -> VarMap -> [VarMap]
-proveAntecedentAnd2 a2 (vm, c) =
-  proveAntecedent (applyMapToAntecedent a2 vm)
+proveAntecedentAnd2 :: KnowledgeBase -> Antecedent -> VarMap -> [VarMap]
+proveAntecedentAnd2 kb a2 vm =
+  proveAntecedent kb (applyMapToAntecedent a2 vm) vm
   
-  
-  
-proveRule :: Rule -> VarMap -> Maybe [Consequent]
-proveRule (Rule antecedent _) varMap =
-  
+    
+proveRule :: KnowledgeBase -> Rule -> VarMap -> [VarMap]
+proveRule kb (Rule antecedent _) varMap =
+  proveAntecedent kb (applyMapToAntecedent antecedent varMap) varMap
   
 
-proveRuleWithConsequents :: Consequent -> [Consequent] -> Rule -> KnowledgeBase -> VarMap -> Maybe Consequent
-proveRuleWithConsequents _ [] _ _ _ = Nothing
-proveRuleWithConsequents initialConsequent (c:cs) rule kb varMap =
-  let proved = proveRule rule (updateVarMap initialConsequent c varMap) in
-    if isJust proved then
-      proved
-    else
-      proveRuleWithConsequents initialConsequent cs rule kb varMap
-      
+proveRuleWithConsequent :: KnowledgeBase -> Consequent -> Consequent -> Rule -> VarMap -> [VarMap]
+proveRuleWithConsequent kb ic c rule vm =
+  map updateIncomingMap (proveRule kb rule (updateVarMap Map.empty c ic))
+  where
+    updateIncomingMap inVm = updateVarMap vm (applyMapToConsequent c inVm) ic
+                             
+proveRuleWithConsequents :: KnowledgeBase -> Consequent -> Rule -> VarMap -> [VarMap]
+proveRuleWithConsequents kb ic rule@(Rule _ cs) vm =
+  foldl' (++) [] (map proveForConsequent (filter (matchConsequent ic) cs))
+  where
+    proveForConsequent pc = proveRuleWithConsequent kb ic pc rule vm
+    
+proveConsequent :: KnowledgeBase -> Consequent -> VarMap -> [VarMap]
+proveConsequent kb@(KnowledgeBase assertions rules) c vm =
+  assertionMaps ++ consequentMaps
+  where
+    matchingAntecedents = filter (matchAssertion c) assertions
+    assertionsAsConsequents = map assertionToConsequent matchingAntecedents
+    assertionMaps = map (updateVarMap Map.empty c) assertionsAsConsequents
+    matchingRules = filter (ruleMatch c) rules
+    consequentMaps = foldl' (++) [] (map proveEachRule matchingRules)
+    proveEachRule r = proveRuleWithConsequents kb c r vm
+    
+    
+    
 
-  
-  
+
