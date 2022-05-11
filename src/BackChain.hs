@@ -2,6 +2,7 @@ module BackChain where
 
 import Data.Either
 import Data.Maybe
+import Data.List
 import qualified Data.Map as Map
 
 data RuleValue =
@@ -60,3 +61,64 @@ matchConsequent (Consequent cName1 cs1) (Consequent cName2 cs2) =
 --  map assertionToConsequent (filter (matchAssertion c) assertions) ++
 --  (filter (matchConsequent c) consequents)
 
+updateVarMapWithPair :: VarMap -> (RuleValue, RuleValue) -> VarMap
+updateVarMapWithPair vm (RuleConstant _, RuleConstant _) = vm
+updateVarMapWithPair vm (RuleConstant s, RuleVariable v) =
+  Map.insert v s vm
+updateVarMapWithPair vm (RuleVariable _, RuleConstant _) = vm
+updateVarMapWithPair vm (RuleVariable _, RuleVariable _) = vm
+
+updateVarMap :: Consequent -> Consequent -> VarMap -> VarMap
+updateVarMap (Consequent _ c1) (Consequent _ c2) vm = foldl' updateVarMapWithPair vm (zip c1 c2)
+
+applyMapToValue :: VarMap -> RuleValue -> RuleValue
+applyMapToValue rc@(RuleConstant s) _ = rc
+applyMapToValue rv@(RuleVariable v) vm =
+  let mapValue = Map.lookup v vm in
+    if isJust mapValue then
+      RuleConstant $ getJust mapValue
+    else
+      rv
+
+applyMapToAntecedent :: Antecedent -> VarMap -> Antecedent
+applyMapToAntecedent (SimpleExpr name v) vm = SimpleExpr name (map (applyMapToValue vm) v)
+applyMapToAntecedent (AndExpr a1 a2) vm = AndExpr (applyMapToAntecedent a1 vm)
+                                                  (applyMapToAntecedent a2 vm)
+applyMapToAntecedent (OrExpr a1 a2) vm = OrExpr (applyMapToAntecedent a1 vm)
+                                                (applyMapToAntecedent a2 vm)
+                                         
+
+proveAntecedent :: Antecedent -> VarMap ->  [(VarMap,[Consequent])]
+proveAntecedent (SimpleExpr name v) vm =
+  proveConsequent (Consequent name v) vm
+proveAntecedent (AndExpr a1 a2) vm =
+  foldl' (++) [] (map (proveAntecedentAnd2 a2) a1Result)
+  where
+    a1Result = proveAntecedent a1 vm
+
+proveAntecedentAnd2 :: Antecedent -> (VarMap, [Consequent]) -> [(VarMap, [Consequent])]
+
+  
+  
+  
+  
+  
+  
+  
+proveRule :: Rule -> VarMap -> Maybe [Consequent]
+proveRule (Rule antecedent _) varMap =
+  
+  
+
+proveRuleWithConsequents :: Consequent -> [Consequent] -> Rule -> KnowledgeBase -> VarMap -> Maybe [Consequent]
+proveRuleWithConsequents _ [] _ _ _ = Nothing
+proveRuleWithConsequents initialConsequent (c:cs) rule kb varMap =
+  let proved = proveRule rule (updateVarMap initialConsequent c varMap) in
+    if isJust proved then
+      proved
+    else
+      proveRuleWithConsequents initialConsequent cs rule kb varMap
+      
+
+  
+  
