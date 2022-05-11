@@ -111,11 +111,7 @@ promptLoop kb@(KnowledgeBase assertions rules) = do
       putStrLn "False"
     promptLoop kb
   else
-    return ()
-    
-    
-    
-    
+    return ()    
   
 main :: IO ()
 main = do

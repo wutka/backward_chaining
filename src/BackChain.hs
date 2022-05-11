@@ -108,18 +108,18 @@ ruleMatch c (Rule _ cs) =
 -- Given a map and two rule values, if the first value is a variable
 -- and the second value is a constant, update the map to map the
 -- variable to the constant value
-updateVarMapWithPair :: VarMap -> (RuleValue, RuleValue) -> VarMap
-updateVarMapWithPair vm (RuleConstant _, RuleConstant _) = vm
-updateVarMapWithPair vm (RuleConstant _, RuleVariable _) = vm
-updateVarMapWithPair vm (RuleVariable v, RuleConstant s) =
+updateVarMapWithPair :: (RuleValue, RuleValue) -> VarMap -> VarMap
+updateVarMapWithPair (RuleConstant _, RuleConstant _) vm = vm
+updateVarMapWithPair (RuleConstant _, RuleVariable _) vm = vm
+updateVarMapWithPair (RuleVariable v, RuleConstant s) vm =
     Map.insert v s vm
-updateVarMapWithPair vm (RuleVariable _, RuleVariable _) = vm
+updateVarMapWithPair (RuleVariable _, RuleVariable _) vm = vm
 
 -- Compare two consequents and for all the variables in the first one
 -- where the corresponding value in the second consequent is a constant,
 -- update the map to map the variable to that constant value
 updateVarMap :: VarMap -> Consequent -> Consequent -> VarMap
-updateVarMap vm (Consequent _ c1) (Consequent _ c2) = foldl' updateVarMapWithPair vm (zip c1 c2)
+updateVarMap vm (Consequent _ c1) (Consequent _ c2) = foldr updateVarMapWithPair vm (zip c1 c2)
 
 -- If a value is a variable, see if it is in the map, and if so, replace
 -- it with a constant, otherwise leave the variable intact
@@ -237,7 +237,7 @@ proveConsequent kb@(KnowledgeBase assertions rules) c vm =
     matchingRules = filter (ruleMatch c) rules
     -- Create the list of variable maps resulting from proving the rule
     -- from the given consequent
-    consequentMaps = foldl' (++) [] (map proveEachRule matchingRules)
+    consequentMaps = concatMap proveEachRule matchingRules
     -- Try proving the rule from the given consequent
     proveEachRule r = proveRuleWithConsequents kb c r vm
     
