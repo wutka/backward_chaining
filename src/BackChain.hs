@@ -88,20 +88,19 @@ applyMapToAntecedent (OrExpr a1 a2) vm = OrExpr (applyMapToAntecedent a1 vm)
                                                 (applyMapToAntecedent a2 vm)
                                          
 
-proveAntecedent :: Antecedent -> VarMap ->  [(VarMap,[Consequent])]
+proveAntecedent :: Antecedent -> VarMap ->  [VarMap]
 proveAntecedent (SimpleExpr name v) vm =
   proveConsequent (Consequent name v) vm
 proveAntecedent (AndExpr a1 a2) vm =
   foldl' (++) [] (map (proveAntecedentAnd2 a2) a1Result)
   where
     a1Result = proveAntecedent a1 vm
+proveAntecedent (OrExpr a1 a2) vm =
+  (proveAntecedent a1 vm) ++ (proveAntecedent a2 vm)
 
-proveAntecedentAnd2 :: Antecedent -> (VarMap, [Consequent]) -> [(VarMap, [Consequent])]
-
-  
-  
-  
-  
+proveAntecedentAnd2 :: Antecedent -> VarMap -> [VarMap]
+proveAntecedentAnd2 a2 (vm, c) =
+  proveAntecedent (applyMapToAntecedent a2 vm)
   
   
   
@@ -110,7 +109,7 @@ proveRule (Rule antecedent _) varMap =
   
   
 
-proveRuleWithConsequents :: Consequent -> [Consequent] -> Rule -> KnowledgeBase -> VarMap -> Maybe [Consequent]
+proveRuleWithConsequents :: Consequent -> [Consequent] -> Rule -> KnowledgeBase -> VarMap -> Maybe Consequent
 proveRuleWithConsequents _ [] _ _ _ = Nothing
 proveRuleWithConsequents initialConsequent (c:cs) rule kb varMap =
   let proved = proveRule rule (updateVarMap initialConsequent c varMap) in
