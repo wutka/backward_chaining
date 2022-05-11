@@ -1,6 +1,7 @@
 module Lexer where
 
 import Data.Char
+import Data.List
 
 data Token
      = TokenAnd
@@ -36,6 +37,19 @@ isSymbolStart c = isAlpha c || c == '_' || c == '-'
 isSymbolChar :: Char -> Bool
 isSymbolChar c = isSymbolStart c || isDigit c
 
+isValidSymbol :: String -> Bool
+isValidSymbol s = isSymbolStart (head s) && all isSymbolChar (tail s)
+
+showSymbol :: String -> String
+showSymbol s =
+  if isValidSymbol s then
+    s
+  else
+    "\""++(foldl' (++) [] (map expandChar s))++"\""
+  where
+    expandChar '"' = "\\\""
+    expandChar ch = [ch]
+    
 lexer :: String -> [Token]
 lexer [] = []
 lexer (c:cs)

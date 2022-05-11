@@ -20,4 +20,12 @@ parseAssertion s = do
   return $ head (lefts parsed)
   where
     addPeriod s = if last s == '.' then s else s ++ ['.']
+
+parseRule :: String -> IO Rule
+parseRule s = do
+  let parsed = parser (lexer $ addPeriod s)
+  return $ head (rights parsed)
+  where
+    addPeriod s = if last s == '.' then s else s ++ ['.']
+  
     
