@@ -248,7 +248,7 @@ proveConsequent kb@(KnowledgeBase assertions rules) c sc@(SearchContext vm csqs)
     assertionMaps ++ consequentMaps
   where
     -- If this consequent is a constant, flag that we have searched for it
-    newCsqs = if isConstantConsequent c then c:csqs else csqs
+    newCsqs = c:csqs
     -- Find all the assertions that match the consequent
     matchingAssertions = filter (matchAssertion c) assertions
     -- Convert the matches assertions to consequents
