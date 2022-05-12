@@ -28,4 +28,7 @@ parseRule s = do
   where
     addPeriod s = if last s == '.' then s else s ++ ['.']
   
-    
+parseQuery :: String -> IO Consequent
+parseQuery s = do
+  let parsed = queryParser (lexer s)
+  return parsed

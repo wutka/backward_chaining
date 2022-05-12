@@ -7,7 +7,9 @@ import BackChain
 
 }
 
-%name parser
+%name parser KnowledgeBase
+%name queryParser Consequent
+
 %tokentype { Token }
 %error { parseError }
 
@@ -60,7 +62,5 @@ Consequents : Consequent ',' Consequents { $1 : $3 }
             | Consequent { [$1] }
 
 Rule : Expr ':-' Consequents '.' { Rule $1 $3 }
-
-
   
 

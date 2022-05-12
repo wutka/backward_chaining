@@ -96,7 +96,7 @@ assertionValueMatch _ (RuleVariable _) = True
 matchAssertion :: Consequent -> Assertion -> Bool
 matchAssertion (Consequent cName cs) (Assertion aName as) =
   -- Make sure the names match, and then make sure all values match
-  aName == cName && and (zipWith assertionValueMatch as cs)
+  aName == cName && length cs == length as && and (zipWith assertionValueMatch as cs)
 
 -- For two consequent values to match, if either consequent contains
 -- a variable, they match, otherwise, if they are both constants,
@@ -109,7 +109,7 @@ consequentValueMatch _ _ = True
 -- match in places where they each have a constant
 matchConsequent :: Consequent -> Consequent -> Bool
 matchConsequent (Consequent cName1 cs1) (Consequent cName2 cs2) =
-  cName1 == cName2 && and (zipWith consequentValueMatch cs1 cs2)
+  cName1 == cName2 && length cs1 == length cs2 &&  and (zipWith consequentValueMatch cs1 cs2)
 
 -- A consequent matches a rule if it matches any of the rule's consequents
 ruleMatch :: Consequent -> Rule -> Bool
@@ -121,7 +121,7 @@ ruleMatch c (Rule _ cs) =
 -- variable to the constant value
 updateVarMapWithPair :: (RuleValue, RuleValue) -> VarMap -> VarMap
 updateVarMapWithPair (RuleConstant _, RuleConstant _) vm = vm
-updateVarMapWithPair (RuleConstant _, RuleVariable _) vm = vm
+updateVarMapWithPair (RuleConstant s, RuleVariable v) vm = Map.insert v s vm
 updateVarMapWithPair (RuleVariable v, RuleConstant s) vm =
     Map.insert v s vm
 updateVarMapWithPair (RuleVariable _, RuleVariable _) vm = vm
@@ -215,14 +215,14 @@ proveRule kb rule@(Rule antecedent _) sc@(SearchContext varMap _) =
 -- in the incoming var map
 proveRuleWithConsequent :: KnowledgeBase -> Consequent -> Consequent -> Rule -> SearchContext -> [SearchContext]
 proveRuleWithConsequent kb ic c rule sc@(SearchContext vm csqs) =
-  map (updateIncomingContext ic vm c) (proveRule kb rule (SearchContext (updateVarMap Map.empty c ic) csqs))
+  map (updateIncomingContext ic vm c) (proveRule kb rule (SearchContext (updateVarMap Map.empty ic c) csqs))
 
 updateIncomingContext :: Consequent -> VarMap -> Consequent -> SearchContext -> SearchContext
 updateIncomingContext ic vm c (SearchContext invm csqs) =
   SearchContext updatedMap csqs
   where
     resultingConsequent = applyMapToConsequent c invm
-    updatedMap = updateVarMap vm resultingConsequent ic
+    updatedMap = updateVarMap vm ic resultingConsequent
     updatedConsequent = applyMapToConsequent ic updatedMap
   
 -- To prove a rule for an incoming consequent, we look for all the consequents
@@ -257,7 +257,7 @@ proveConsequent kb@(KnowledgeBase assertions rules) c sc@(SearchContext vm csqs)
     -- against variables in the consequent
     assertionMaps = map (updateContext c) assertionsAsConsequents
     -- update the context with a new map
-    updateContext c ac = SearchContext (updateVarMap Map.empty c ac) newCsqs
+    updateContext c ac = SearchContext (updateVarMap vm c ac) newCsqs
     -- Look for all rules that have a consequent that matches the consequent
     matchingRules = filter (ruleMatch c) rules
     -- Create the list of variable maps resulting from proving the rule
@@ -265,8 +265,3 @@ proveConsequent kb@(KnowledgeBase assertions rules) c sc@(SearchContext vm csqs)
     consequentMaps = concatMap proveEachRule matchingRules
     -- Try proving the rule from the given consequent
     proveEachRule r = proveRuleWithConsequents kb c r (SearchContext vm newCsqs)
-    
-    
-    
-
-

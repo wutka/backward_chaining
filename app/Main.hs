@@ -4,6 +4,7 @@ import System.IO
 import BackChain
 import Loader
 import qualified Data.Map as Map
+import Data.List
 import Data.Char
 
 printAssertions :: KnowledgeBase -> IO ()
@@ -59,7 +60,15 @@ showHelp = do
   putStrLn ":quit -  Quit"
   putStrLn ":help -  Display this help information"
   
-  
+printAllMatches :: Consequent -> [SearchContext] -> IO ()
+printAllMatches c sc = do
+
+  putStrLn $ unlines $ filter (not . null) $ map printConsequent (nub $ map getVM sc)
+  where
+    getVM (SearchContext vm _) = vm
+    printConsequent vm = if isConstantConsequent $ updatedConsequent vm then show $ updatedConsequent vm else ""
+    updatedConsequent vm = applyMapToConsequent c vm
+    
 promptLoop :: KnowledgeBase -> IO ()
 promptLoop kb@(KnowledgeBase assertions rules) = do
   putStr "Enter query: "
@@ -103,9 +112,13 @@ promptLoop kb@(KnowledgeBase assertions rules) = do
     showHelp
     promptLoop kb
   else if q /= ":quit" then do
-    a <- parseAssertion q
-    if not $ null (proveConsequent kb (assertionToConsequent a) (SearchContext Map.empty [])) then
-      putStrLn "True"
+    c <- parseQuery q
+    let result = proveConsequent kb c (SearchContext Map.empty [])
+    if not $ null result then
+      if isConstantConsequent c then
+        putStrLn "True"
+      else
+        printAllMatches c (nub result)
     else
       putStrLn "False"
     promptLoop kb
