@@ -2,7 +2,6 @@ module Main where
 
 import System.IO
 import BackChain
-    ( KnowledgeBase(..), assertionToConsequent, proveConsequent )
 import Loader
 import qualified Data.Map as Map
 import Data.Char
@@ -105,7 +104,7 @@ promptLoop kb@(KnowledgeBase assertions rules) = do
     promptLoop kb
   else if q /= ":quit" then do
     a <- parseAssertion q
-    if not $ null (proveConsequent kb (assertionToConsequent a) Map.empty) then
+    if not $ null (proveConsequent kb (assertionToConsequent a) (SearchContext Map.empty [])) then
       putStrLn "True"
     else
       putStrLn "False"

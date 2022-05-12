@@ -68,6 +68,17 @@ data KnowledgeBase =
 -- VarMap is used to map variable names to values
 type VarMap = Map.Map String String
 
+data SearchContext =
+  SearchContext VarMap [Consequent]
+  deriving (Show, Eq)
+
+isConstantValue :: RuleValue -> Bool
+isConstantValue (RuleConstant _) = True
+isConstantValue _ = False
+
+isConstantConsequent :: Consequent -> Bool
+isConstantConsequent (Consequent _ vs) = all isConstantValue vs
+
 -- It is handy to convert an assertion into a consequent (with no
 -- variables) so the same matching algorithms can be used
 assertionToConsequent :: Assertion -> Consequent
@@ -141,12 +152,12 @@ applyMapToAntecedent (OrExpr a1 a2) vm = OrExpr (applyMapToAntecedent a1 vm)
                                                 (applyMapToAntecedent a2 vm)
                                          
 -- Attempts to prove an antecedent by examining the knowledge base
-proveAntecedent :: KnowledgeBase -> Antecedent -> VarMap ->  [VarMap]
+proveAntecedent :: KnowledgeBase -> Antecedent -> SearchContext ->  [SearchContext]
 
 -- If the antecedent is a simple expression, convert it to a consequent
 -- and then attempt to prove the consequent against the knowledge base
-proveAntecedent kb (SimpleExpr name v) vm =
-  proveConsequent kb (Consequent name v) vm
+proveAntecedent kb (SimpleExpr name v) sc =
+  proveConsequent kb (Consequent name v) sc
 
 -- If the antecedent is an AndExpr, first prove the left antecedent. This
 -- will result in a list of variable mappings. For each of these mappings,
@@ -157,28 +168,28 @@ proveAntecedent kb (SimpleExpr name v) vm =
 -- would be two maps returned in proving the first assertion, one mapping
 -- ?x to "baz" and one mapping ?x to "quux". Then, this function will
 -- look for all results for is-bar "baz" and then for is-bar "quux".
-proveAntecedent kb (AndExpr a1 a2) vm =
+proveAntecedent kb (AndExpr a1 a2) sc =
   concatMap (proveAntecedentAnd2 kb a2) a1Result
   where
-    a1Result = proveAntecedent kb a1 vm
+    a1Result = proveAntecedent kb a1 sc
 
 -- Unlike the AndExpr, for the OrExpr we just get all the matches for
 -- the left antecedent and all the matches for the right antecedent
 -- and don't need to update the right with results from the left.
-proveAntecedent kb (OrExpr a1 a2) vm =
-  proveAntecedent kb a1 vm ++ proveAntecedent kb a2 vm
+proveAntecedent kb (OrExpr a1 a2) sc =
+  proveAntecedent kb a1 sc ++ proveAntecedent kb a2 sc
 
 -- Apply the incoming map to the second antecedent and try to
 -- prove the second antecedent
-proveAntecedentAnd2 :: KnowledgeBase -> Antecedent -> VarMap -> [VarMap]
-proveAntecedentAnd2 kb a2 vm =
-  proveAntecedent kb (applyMapToAntecedent a2 vm) vm
+proveAntecedentAnd2 :: KnowledgeBase -> Antecedent -> SearchContext -> [SearchContext]
+proveAntecedentAnd2 kb a2 sc@(SearchContext vm _) =
+  proveAntecedent kb (applyMapToAntecedent a2 vm) sc
   
 -- To prove a rule given a particular variable map, apply the map
 -- to the antecedent and then try to prove the antecedent
-proveRule :: KnowledgeBase -> Rule -> VarMap -> [VarMap]
-proveRule kb rule@(Rule antecedent _) varMap =
-  proveAntecedent kb (applyMapToAntecedent antecedent varMap) varMap
+proveRule :: KnowledgeBase -> Rule -> SearchContext -> [SearchContext]
+proveRule kb rule@(Rule antecedent _) sc@(SearchContext varMap _) =
+  proveAntecedent kb (applyMapToAntecedent antecedent varMap) sc
   
 -- To prove a rule by matching against a specific consequent in the rule,
 -- initialize a variable mapping in which any variables in the rule's consequent
@@ -202,44 +213,58 @@ proveRule kb rule@(Rule antecedent _) varMap =
 -- is a list of two maps, one containing ?x="bar" and the other containing
 -- ?x="baz" (there may be additional variables in the maps that were
 -- in the incoming var map
-proveRuleWithConsequent :: KnowledgeBase -> Consequent -> Consequent -> Rule -> VarMap -> [VarMap]
-proveRuleWithConsequent kb ic c rule vm =
-  map updateIncomingMap (proveRule kb rule (updateVarMap Map.empty c ic))
-  where
-    updateIncomingMap inVm = updateVarMap vm (applyMapToConsequent c inVm) ic
+proveRuleWithConsequent :: KnowledgeBase -> Consequent -> Consequent -> Rule -> SearchContext -> [SearchContext]
+proveRuleWithConsequent kb ic c rule sc@(SearchContext vm csqs) =
+  map (updateIncomingContext ic vm c) (proveRule kb rule (SearchContext (updateVarMap Map.empty c ic) csqs))
 
+updateIncomingContext :: Consequent -> VarMap -> Consequent -> SearchContext -> SearchContext
+updateIncomingContext ic vm c (SearchContext invm csqs) =
+  SearchContext updatedMap csqs
+  where
+    resultingConsequent = applyMapToConsequent c invm
+    updatedMap = updateVarMap vm resultingConsequent ic
+    updatedConsequent = applyMapToConsequent ic updatedMap
+  
 -- To prove a rule for an incoming consequent, we look for all the consequents
 -- in the rule that match it. For example, if an incoming consequent is is-foo "bar"
 -- and the rule has two consequents  is-foo ?x and is-foo ?y, we try each of
 -- them. We then concatenate the var map lists returned in each proveForConsequent
 -- call to make one list of maps.
-proveRuleWithConsequents :: KnowledgeBase -> Consequent -> Rule -> VarMap -> [VarMap]
-proveRuleWithConsequents kb ic rule@(Rule _ cs) vm =
+proveRuleWithConsequents :: KnowledgeBase -> Consequent -> Rule -> SearchContext -> [SearchContext]
+proveRuleWithConsequents kb ic rule@(Rule _ cs) sc@(SearchContext vm csqs) =
   concatMap proveForConsequent (filter (matchConsequent ic) cs)
   where
-    proveForConsequent pc = proveRuleWithConsequent kb ic pc rule vm
+    proveForConsequent pc = proveRuleWithConsequent kb ic pc rule sc
 
 -- To prove a consequent, see if it matches any assertions, and then see if it
 -- matches any rules. In order to support backtracking, rather than stopping
 -- at the first match, we return a variable mapping for each possible match.
-proveConsequent :: KnowledgeBase -> Consequent -> VarMap -> [VarMap]
-proveConsequent kb@(KnowledgeBase assertions rules) c vm =
-  assertionMaps ++ consequentMaps
+proveConsequent :: KnowledgeBase -> Consequent -> SearchContext -> [SearchContext]
+proveConsequent kb@(KnowledgeBase assertions rules) c sc@(SearchContext vm csqs) =
+-- If we have already searched for this consequent, return the current context
+  if elem c csqs then
+    [sc]
+  else
+    assertionMaps ++ consequentMaps
   where
+    -- If this consequent is a constant, flag that we have searched for it
+    newCsqs = if isConstantConsequent c then c:csqs else csqs
     -- Find all the assertions that match the consequent
     matchingAssertions = filter (matchAssertion c) assertions
     -- Convert the matches assertions to consequents
     assertionsAsConsequents = map assertionToConsequent matchingAssertions
     -- Create variable mappings by matching constants in the assertion
     -- against variables in the consequent
-    assertionMaps = map (updateVarMap Map.empty c) assertionsAsConsequents
+    assertionMaps = map (updateContext c) assertionsAsConsequents
+    -- update the context with a new map
+    updateContext c ac = SearchContext (updateVarMap Map.empty c ac) newCsqs
     -- Look for all rules that have a consequent that matches the consequent
     matchingRules = filter (ruleMatch c) rules
     -- Create the list of variable maps resulting from proving the rule
     -- from the given consequent
     consequentMaps = concatMap proveEachRule matchingRules
     -- Try proving the rule from the given consequent
-    proveEachRule r = proveRuleWithConsequents kb c r vm
+    proveEachRule r = proveRuleWithConsequents kb c r (SearchContext vm newCsqs)
     
     
     

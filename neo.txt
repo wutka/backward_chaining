@@ -1,0 +1,10 @@
+is-noob Neo.
+is-disenchanted Trinity.
+loves Trinity Neo.
+proclaims-love Trinity Neo.
+(is-noob ?x) or (is-disenchanted ?x) :- visits-oracle ?x.
+visits-oracle ?x :- picks-the-one ?x.
+(is-noob ?x) and (visits-oracle ?x) :- oracle-says-not-the-one ?x, is-disenchanted ?x.
+((is-disenchanted ?x) or (is-noob ?x)) and (oracle-says-not-the-one ?x) :- practices-kung-fu ?x.
+(is-disenchanted ?x) and (loves ?x ?y) :- proclaims-love ?x ?y.
+((oracle-says-not-the-one ?x) and (proclaims-love ?y ?x)) and (picks-the-one ?y) :- is-the-one ?x.
